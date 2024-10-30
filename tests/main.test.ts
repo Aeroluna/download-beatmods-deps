@@ -66,37 +66,6 @@ function mockFetch(url: string, body: nf.BodyInit | undefined, status = 200) {
     );
 }
 
-function mockGitHubApiResponse(response: nf.Response | undefined = undefined) {
-  response ||= new nf.Response(
-    fs.createReadStream(
-      path.join(__dirname, "files", "beat-saber-reference-assemblies.zip"),
-    ),
-    {
-      status: 200,
-      headers: new nf.Headers({ "Content-Type": "application/octet-stream" }),
-    },
-  );
-
-  when(fetch)
-    .calledWith(
-      expect.stringMatching(
-        new RegExp(
-          "https://api.github.com/repos/nicoco007/BeatSaberReferenceAssemblies/zipball/refs/tags/v.*",
-        ),
-      ),
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer github_pat_whatever`,
-          "User-Agent": "setup-beat-saber",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-      },
-    )
-    .mockImplementation(() => response);
-}
-
 function mockBeatModsResponse(response: nf.Response | undefined = undefined) {
   when(fetch)
     .calledWith(
@@ -185,10 +154,6 @@ describe("main", () => {
     setInput("aliases", "{}");
     setInput("additional-dependencies", "{}");
 
-    process.env["GITHUB_ENV"] = "github_env.txt";
-    process.env["GITHUB_SHA"] = "4ef156d43d79b5b63b421f7e867ff67d57ee42d8";
-
-    mockGitHubApiResponse();
     mockBeatModsResponse();
     mockProject();
 
@@ -210,40 +175,11 @@ describe("main", () => {
     );
   });
 
-  it("downloads reference assemblies", async () => {
-    await run();
-
-    expect(
-      fs.existsSync(
-        path.join(
-          __dirname,
-          "BeatSaberReferenceAssemblies",
-          "Beat Saber_Data",
-          "Managed",
-          "Main.dll",
-        ),
-      ),
-    ).toBe(true);
-  });
-
-  it("throws if reference assemblies response isn't successful", async () => {
-    mockGitHubApiResponse(
-      new nf.Response(null, { status: 401, statusText: "Unauthorized" }),
-    );
-
-    await expect(run()).rejects.toThrow(
-      "Unexpected response status 401 Unauthorized",
-    );
-  });
-
   it("downloads all mods listed in manifest", async () => {
     await run();
 
     expect(fetch).toHaveBeenCalledWith(
       "https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=1.13.2",
-    );
-    expect(fetch).toHaveBeenCalledWith(
-      "https://beatmods.com/uploads/600a59038384cf2e7ec72582/universal/BSIPA-4.1.4.zip",
     );
     expect(fetch).toHaveBeenCalledWith(
       "https://beatmods.com/uploads/600a65978384cf2e7ec725a9/universal/BS Utils-1.7.0.zip",
@@ -260,9 +196,6 @@ describe("main", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=1.16.1",
-    );
-    expect(fetch).toHaveBeenCalledWith(
-      "https://beatmods.com/uploads/60b14ea32d008b3daa41e8e0/universal/BSIPA-4.1.6.zip",
     );
     expect(fetch).toHaveBeenCalledWith(
       "https://beatmods.com/uploads/60b15a4b2d008b3daa41e900/universal/BS Utils-1.10.0.zip",

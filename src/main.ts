@@ -22,7 +22,6 @@ export async function run() {
   );
 
   const extractPath = getInput("path", { required: true });
-  await downloadReferenceAssemblies(wantedGameVersion, extractPath);
 
   let gameVersion = gameVersions.find(
     (gv) =>
@@ -51,6 +50,11 @@ export async function run() {
     ...projectInfo.dependencies,
     ...additionalDependencies,
   })) {
+    // is installed with other beat saber references
+    if (depName == "BSIPA") {
+      continue;
+    }
+
     const dependency = mods.find(
       (m) =>
         (m.name === depName || m.name == depAliases[depName]) &&
@@ -73,21 +77,6 @@ export async function run() {
 
     info(`Downloading mod '${depName}' version '${dependency.version}'`);
     await downloadAndExtract(`https://beatmods.com${depDownload}`, extractPath);
-
-    // special case since BSIPA moves files when installed with IPA.exe
-    if (depName === "BSIPA") {
-      fs.copySync(
-        path.join(extractPath, "IPA", "Libs"),
-        path.join(extractPath, "Libs"),
-        {
-          overwrite: true,
-        },
-      );
-      fs.copySync(
-        path.join(extractPath, "IPA", "Data"),
-        path.join(extractPath, "Beat Saber_Data"),
-      );
-    }
   }
 
   fs.appendFileSync(
@@ -114,40 +103,6 @@ async function downloadAndExtract(url: string, extractPath: string) {
   await decompress(Buffer.from(await response.arrayBuffer()), extractPath, {
     // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
     filter: (file) => !file.path.endsWith("/"),
-  });
-}
-
-async function downloadReferenceAssemblies(
-  version: string,
-  extractPath: string,
-) {
-  const accessToken = getInput("access-token", { required: true });
-  const url = `https://api.github.com/repos/nicoco007/BeatSaberReferenceAssemblies/zipball/refs/tags/v${version}`;
-  const headers = {
-    Accept: "application/vnd.github+json",
-    Authorization: `Bearer ${accessToken}`,
-    "User-Agent": "setup-beat-saber",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-  info(`Downloading reference assemblies for version '${version}'`);
-  const response = await fetch(url, { method: "GET", headers });
-
-  if (response.status != 200) {
-    throw new Error(
-      `Unexpected response status ${response.status} ${response.statusText}`,
-    );
-  }
-
-  await decompress(Buffer.from(await response.arrayBuffer()), extractPath, {
-    // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
-    filter: (file) => !file.path.endsWith("/"),
-    map: (file) => {
-      if (file.type == "file") {
-        file.path = file.path.split("/").slice(2).join(path.sep);
-      }
-
-      return file;
-    },
   });
 }
 

@@ -49927,12 +49927,9 @@ var decompress_default = /*#__PURE__*/__nccwpck_require__.n(decompress);
 // EXTERNAL MODULE: ./node_modules/fs-extra/lib/index.js
 var lib = __nccwpck_require__(5630);
 var lib_default = /*#__PURE__*/__nccwpck_require__.n(lib);
-// EXTERNAL MODULE: external "path"
-var external_path_ = __nccwpck_require__(1017);
 ;// CONCATENATED MODULE: external "child_process"
 const external_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("child_process");
 ;// CONCATENATED MODULE: ./src/main.ts
-
 
 
 
@@ -49945,7 +49942,6 @@ async function run() {
     const gameVersions = await fetchJson("https://versions.beatmods.com/versions.json");
     const versionAliases = await fetchJson("https://alias.beatmods.com/aliases.json");
     const extractPath = (0,core.getInput)("path", { required: true });
-    await downloadReferenceAssemblies(wantedGameVersion, extractPath);
     let gameVersion = gameVersions.find((gv) => gv === wantedGameVersion ||
         versionAliases[gv].some((va) => va === wantedGameVersion));
     if (gameVersion == null) {
@@ -49961,6 +49957,10 @@ async function run() {
         ...projectInfo.dependencies,
         ...additionalDependencies,
     })) {
+        // is installed with other beat saber references
+        if (depName == "BSIPA") {
+            continue;
+        }
         const dependency = mods.find((m) => (m.name === depName || m.name == depAliases[depName]) &&
             (0,semver.satisfies)(m.version, depVersion));
         if (dependency == null) {
@@ -49974,13 +49974,6 @@ async function run() {
         }
         (0,core.info)(`Downloading mod '${depName}' version '${dependency.version}'`);
         await downloadAndExtract(`https://beatmods.com${depDownload}`, extractPath);
-        // special case since BSIPA moves files when installed with IPA.exe
-        if (depName === "BSIPA") {
-            lib_default().copySync(external_path_.join(extractPath, "IPA", "Libs"), external_path_.join(extractPath, "Libs"), {
-                overwrite: true,
-            });
-            lib_default().copySync(external_path_.join(extractPath, "IPA", "Data"), external_path_.join(extractPath, "Beat Saber_Data"));
-        }
     }
     lib_default().appendFileSync(process.env["GITHUB_ENV"], `BeatSaberDir=${extractPath}\nGameDirectory=${extractPath}\n`, "utf8");
 }
@@ -49996,31 +49989,6 @@ async function downloadAndExtract(url, extractPath) {
     await decompress_default()(Buffer.from(await response.arrayBuffer()), extractPath, {
         // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
         filter: (file) => !file.path.endsWith("/"),
-    });
-}
-async function downloadReferenceAssemblies(version, extractPath) {
-    const accessToken = (0,core.getInput)("access-token", { required: true });
-    const url = `https://api.github.com/repos/nicoco007/BeatSaberReferenceAssemblies/zipball/refs/tags/v${version}`;
-    const headers = {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${accessToken}`,
-        "User-Agent": "setup-beat-saber",
-        "X-GitHub-Api-Version": "2022-11-28",
-    };
-    (0,core.info)(`Downloading reference assemblies for version '${version}'`);
-    const response = await fetch(url, { method: "GET", headers });
-    if (response.status != 200) {
-        throw new Error(`Unexpected response status ${response.status} ${response.statusText}`);
-    }
-    await decompress_default()(Buffer.from(await response.arrayBuffer()), extractPath, {
-        // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
-        filter: (file) => !file.path.endsWith("/"),
-        map: (file) => {
-            if (file.type == "file") {
-                file.path = file.path.split("/").slice(2).join(external_path_.sep);
-            }
-            return file;
-        },
     });
 }
 async function getProjectInfo(projectPath, configuration) {

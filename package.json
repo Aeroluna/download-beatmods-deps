@@ -1,5 +1,5 @@
 {
-  "name": "setup-beat-saber",
+  "name": "download-beatmods-deps",
   "version": "1.0.0",
   "description": "",
   "main": "src/index.js",
@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nicoco007/setup-beat-saber.git"
+    "url": "git+https://github.com/aeroluna/download-beatmods-deps.git"
   },
   "author": "",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/nicoco007/setup-beat-saber/issues"
+    "url": "https://github.com/aeroluna/download-beatmods-deps/issues"
   },
-  "homepage": "https://github.com/nicoco007/setup-beat-saber#readme",
+  "homepage": "https://github.com/aeroluna/download-beatmods-deps#readme",
   "exports": {
     ".": "./dist/index.js"
   },

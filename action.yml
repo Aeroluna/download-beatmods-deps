@@ -1,13 +1,10 @@
-name: Set up Beat Saber
-description: Fetch Beat Saber bindings and dependencies.
+name: Download Beatmods Dependencies
+description: Download and extract dependencies from beatmods using manifest.json
 author: nicoco007
 branding:
   icon: download
   color: gray-dark
 inputs:
-  access-token:
-    description: Token used to download bindings
-    required: true
   path:
     description: Where to unpack dependencies
     required: true

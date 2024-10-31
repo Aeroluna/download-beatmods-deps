@@ -49937,7 +49937,10 @@ const external_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(
 
 
 async function run() {
-    const projectInfo = await getProjectInfo((0,core.getInput)("project-path", { required: true }), (0,core.getInput)("project-configuration", { required: true }));
+    const projectConfiguration = (0,core.getInput)("project-configuration", {
+        required: true,
+    });
+    const projectInfo = await getProjectInfo((0,core.getInput)("project-path", { required: true }), projectConfiguration);
     const wantedGameVersion = (0,core.getInput)("game-version") || projectInfo.gameVersion;
     const gameVersions = await fetchJson("https://versions.beatmods.com/versions.json");
     const versionAliases = await fetchJson("https://alias.beatmods.com/aliases.json");
@@ -49953,7 +49956,16 @@ async function run() {
     const mods = await fetchJson(`https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=${gameVersion}`);
     const depAliases = JSON.parse((0,core.getInput)("aliases", { required: true }));
     const additionalDependencies = JSON.parse((0,core.getInput)("additional-dependencies", { required: true }));
+    const additionalProjectPaths = (0,core.getInput)("additional-project-paths");
+    let additionalProjectDependencies = {};
+    additionalProjectPaths
+        .split(";")
+        .forEach(async (n) => (additionalProjectDependencies = {
+        ...additionalProjectDependencies,
+        ...(await getProjectInfo(n, projectConfiguration)).dependencies,
+    }));
     for (const [depName, depVersion] of Object.entries({
+        ...additionalProjectDependencies,
         ...projectInfo.dependencies,
         ...additionalDependencies,
     })) {

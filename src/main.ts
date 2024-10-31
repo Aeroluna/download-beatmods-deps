@@ -1,15 +1,18 @@
-import { error, getInput, info, warning } from "@actions/core";
+import { getInput, info, warning } from "@actions/core";
 import fetch from "node-fetch";
 import { satisfies } from "semver";
 import decompress from "decompress";
 import fs from "fs-extra";
-import * as path from "path";
 import { spawn } from "child_process";
 
 export async function run() {
+  const projectConfiguration = getInput("project-configuration", {
+    required: true,
+  });
+
   const projectInfo = await getProjectInfo(
     getInput("project-path", { required: true }),
-    getInput("project-configuration", { required: true }),
+    projectConfiguration,
   );
 
   const wantedGameVersion = getInput("game-version") || projectInfo.gameVersion;
@@ -46,7 +49,20 @@ export async function run() {
     getInput("additional-dependencies", { required: true }),
   );
 
+  const additionalProjectPaths = getInput("additional-project-paths");
+  let additionalProjectDependencies = {};
+  additionalProjectPaths
+    .split(";")
+    .forEach(
+      async (n) =>
+        (additionalProjectDependencies = {
+          ...additionalProjectDependencies,
+          ...(await getProjectInfo(n, projectConfiguration)).dependencies,
+        }),
+    );
+
   for (const [depName, depVersion] of Object.entries({
+    ...additionalProjectDependencies,
     ...projectInfo.dependencies,
     ...additionalDependencies,
   })) {

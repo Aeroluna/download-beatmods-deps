@@ -89,39 +89,32 @@ export async function run() {
 
     if (dependency == null) {
       if (depName in additionalSources) {
-        const releases = await fetchJson<GithubRelease[]>(
-          `https://api.github.com/repos/${additionalSources[depName]}/releases`,
+        const additionalSource = additionalSources[depName];
+        info(
+          `Mod '${depName}' version '${depVersion}' not found on Beatmods, searching '${additionalSource}'`,
         );
 
-        for (const asset of releases.flatMap((n) => n.assets)) {
-          const assetSplit = asset.name.split("-");
-          const assetVersion = assetSplit[1];
-          const assetGameVersion = getGameVersion(
-            assetSplit[2].substring(2),
+        if (
+          !(await searchGithubRelease(
+            additionalSource,
+            depName,
+            depVersion as string,
+            gameVersion,
+            extractPath,
             gameVersions,
             versionAliases,
+          ))
+        ) {
+          warning(
+            `Mod '${depName}' version '${depVersion}' not found in ${additionalSources[depName]}.`,
           );
-          if (
-            assetSplit[0] != depName ||
-            !satisfies(assetVersion, depVersion as string) ||
-            assetGameVersion != gameVersion
-          ) {
-            continue;
-          }
-
-          info(`Downloading mod '${depName}' version '${assetVersion}'`);
-          await downloadAndExtract(asset.browser_download_url, extractPath);
-          break;
         }
 
-        warning(
-          `Mod '${depName}' version '${depVersion}' not found in ${additionalSources[depName]}.`,
-        );
-        continue;
-      } else {
-        warning(`Mod '${depName}' version '${depVersion}' not found.`);
         continue;
       }
+
+      warning(`Mod '${depName}' version '${depVersion}' not found.`);
+      continue;
     }
 
     const depDownload = dependency.downloads.find(
@@ -162,6 +155,45 @@ async function downloadAndExtract(url: string, extractPath: string) {
     // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
     filter: (file) => !file.path.endsWith("/"),
   });
+}
+
+async function searchGithubRelease(
+  repo: string,
+  depName: string,
+  depVersion: string,
+  gameVersion: string,
+  extractPath: string,
+  gameVersions: string[],
+  versionAliases: VersionAliasCollection,
+) {
+  const releases = await fetchJson<GithubRelease[]>(
+    `https://api.github.com/repos/${repo}/releases`,
+  );
+
+  for (const asset of releases.flatMap((n) => n.assets)) {
+    const assetSplit = asset.name.split("-");
+    const assetVersion = assetSplit[1];
+    const assetGameVersion = getGameVersion(
+      assetSplit[2].substring(2),
+      gameVersions,
+      versionAliases,
+    );
+    if (
+      assetSplit[0] != depName ||
+      !satisfies(assetVersion, depVersion) ||
+      assetGameVersion != gameVersion
+    ) {
+      continue;
+    }
+
+    info(
+      `Downloading mod '${depName}' version '${assetVersion}' from '${repo}'`,
+    );
+    await downloadAndExtract(asset.browser_download_url, extractPath);
+    return true;
+  }
+
+  return false;
 }
 
 function getGameVersion(

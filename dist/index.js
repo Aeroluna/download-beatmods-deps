@@ -49945,8 +49945,7 @@ async function run() {
     const gameVersions = await fetchJson("https://versions.beatmods.com/versions.json");
     const versionAliases = await fetchJson("https://alias.beatmods.com/aliases.json");
     const extractPath = (0,core.getInput)("path", { required: true });
-    let gameVersion = gameVersions.find((gv) => gv === wantedGameVersion ||
-        versionAliases[gv].some((va) => va === wantedGameVersion));
+    let gameVersion = getGameVersion(wantedGameVersion, gameVersions, versionAliases);
     if (gameVersion == null) {
         const latestVersion = gameVersions[0];
         (0,core.warning)(`Game version '${wantedGameVersion}' doesn't exist; using mods from latest version '${latestVersion}'`);
@@ -49980,26 +49979,15 @@ async function run() {
             (0,semver.satisfies)(m.version, depVersion));
         if (dependency == null) {
             if (depName in additionalSources) {
-                const releases = await fetchJson(`https://api.github.com/repos/${additionalSources[depName]}/releases`);
-                for (const asset of releases.flatMap((n) => n.assets)) {
-                    const assetSplit = asset.name.split("-");
-                    const version = assetSplit[1];
-                    if (!assetSplit[0].startsWith(depName) ||
-                        !(0,semver.satisfies)(version, depVersion) ||
-                        assetSplit[2].substring(2) != gameVersion) {
-                        continue;
-                    }
-                    (0,core.info)(`Downloading mod '${depName}' version '${version}'`);
-                    await downloadAndExtract(asset.browser_download_url, extractPath);
-                    break;
+                const additionalSource = additionalSources[depName];
+                (0,core.info)(`Mod '${depName}' version '${depVersion}' not found on Beatmods, searching '${additionalSource}'`);
+                if (!(await searchGithubRelease(additionalSource, depName, depVersion, gameVersion, extractPath, gameVersions, versionAliases))) {
+                    (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found in ${additionalSources[depName]}.`);
                 }
-                (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found in ${additionalSources[depName]}.`);
                 continue;
             }
-            else {
-                (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found.`);
-                continue;
-            }
+            (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found.`);
+            continue;
         }
         const depDownload = dependency.downloads.find((d) => d.type === "universal")?.url;
         if (!depDownload) {
@@ -50024,6 +50012,27 @@ async function downloadAndExtract(url, extractPath) {
         // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
         filter: (file) => !file.path.endsWith("/"),
     });
+}
+async function searchGithubRelease(repo, depName, depVersion, gameVersion, extractPath, gameVersions, versionAliases) {
+    const releases = await fetchJson(`https://api.github.com/repos/${repo}/releases`);
+    for (const asset of releases.flatMap((n) => n.assets)) {
+        const assetSplit = asset.name.split("-");
+        const assetVersion = assetSplit[1];
+        const assetGameVersion = getGameVersion(assetSplit[2].substring(2), gameVersions, versionAliases);
+        if (assetSplit[0] != depName ||
+            !(0,semver.satisfies)(assetVersion, depVersion) ||
+            assetGameVersion != gameVersion) {
+            continue;
+        }
+        (0,core.info)(`Downloading mod '${depName}' version '${assetVersion}' from '${repo}'`);
+        await downloadAndExtract(asset.browser_download_url, extractPath);
+        return true;
+    }
+    return false;
+}
+function getGameVersion(wantedGameVersion, gameVersions, versionAliases) {
+    return gameVersions.find((gv) => gv === wantedGameVersion ||
+        versionAliases[gv].some((va) => va === wantedGameVersion));
 }
 async function getProjectInfo(projectPath, configuration) {
     return new Promise((resolve, reject) => {

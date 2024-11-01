@@ -26,10 +26,10 @@ export async function run() {
 
   const extractPath = getInput("path", { required: true });
 
-  let gameVersion = gameVersions.find(
-    (gv) =>
-      gv === wantedGameVersion ||
-      versionAliases[gv].some((va) => va === wantedGameVersion),
+  let gameVersion = getGameVersion(
+    wantedGameVersion,
+    gameVersions,
+    versionAliases,
   );
   if (gameVersion == null) {
     const latestVersion = gameVersions[0];
@@ -95,16 +95,21 @@ export async function run() {
 
         for (const asset of releases.flatMap((n) => n.assets)) {
           const assetSplit = asset.name.split("-");
-          const version = assetSplit[1];
+          const assetVersion = assetSplit[1];
+          const assetGameVersion = getGameVersion(
+            assetSplit[2].substring(2),
+            gameVersions,
+            versionAliases,
+          );
           if (
-            !assetSplit[0].startsWith(depName) ||
-            !satisfies(version, depVersion as string) ||
-            assetSplit[2].substring(2) != gameVersion
+            assetSplit[0] != depName ||
+            !satisfies(assetVersion, depVersion as string) ||
+            assetGameVersion != gameVersion
           ) {
             continue;
           }
 
-          info(`Downloading mod '${depName}' version '${version}'`);
+          info(`Downloading mod '${depName}' version '${assetVersion}'`);
           await downloadAndExtract(asset.browser_download_url, extractPath);
           break;
         }
@@ -157,6 +162,18 @@ async function downloadAndExtract(url: string, extractPath: string) {
     // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
     filter: (file) => !file.path.endsWith("/"),
   });
+}
+
+function getGameVersion(
+  wantedGameVersion: string,
+  gameVersions: string[],
+  versionAliases: VersionAliasCollection,
+) {
+  return gameVersions.find(
+    (gv) =>
+      gv === wantedGameVersion ||
+      versionAliases[gv].some((va) => va === wantedGameVersion),
+  );
 }
 
 async function getProjectInfo(

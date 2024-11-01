@@ -49956,28 +49956,50 @@ async function run() {
     const mods = await fetchJson(`https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=${gameVersion}`);
     const depAliases = JSON.parse((0,core.getInput)("aliases", { required: true }));
     const additionalDependencies = JSON.parse((0,core.getInput)("additional-dependencies", { required: true }));
-    const additionalProjectPaths = (0,core.getInput)("additional-project-paths");
     let additionalProjectDependencies = {};
-    additionalProjectPaths
-        .split(";")
-        .forEach(async (n) => (additionalProjectDependencies = {
-        ...additionalProjectDependencies,
-        ...(await getProjectInfo(n, projectConfiguration)).dependencies,
+    const excludedNames = [];
+    await Promise.all((JSON.parse((0,core.getInput)("additional-project-paths", { required: true }))).map(async (n) => {
+        const additionalProjectInfo = await getProjectInfo(n, projectConfiguration);
+        additionalProjectDependencies = {
+            ...additionalProjectDependencies,
+            ...additionalProjectInfo.dependencies,
+        };
+        excludedNames.push(additionalProjectInfo.pluginId);
     }));
+    const additionalSources = JSON.parse((0,core.getInput)("additional-sources", { required: true }));
     for (const [depName, depVersion] of Object.entries({
         ...additionalProjectDependencies,
         ...projectInfo.dependencies,
         ...additionalDependencies,
     })) {
         // is installed with other beat saber references
-        if (depName == "BSIPA") {
+        if (depName == "BSIPA" || excludedNames.includes(depName)) {
             continue;
         }
         const dependency = mods.find((m) => (m.name === depName || m.name == depAliases[depName]) &&
             (0,semver.satisfies)(m.version, depVersion));
         if (dependency == null) {
-            (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found.`);
-            continue;
+            if (depName in additionalSources) {
+                const releases = await fetchJson(`https://api.github.com/repos/${additionalSources[depName]}/releases`);
+                for (const asset of releases.flatMap((n) => n.assets)) {
+                    const assetSplit = asset.name.split("-");
+                    const version = assetSplit[1];
+                    if (!assetSplit[0].startsWith(depName) ||
+                        !(0,semver.satisfies)(version, depVersion) ||
+                        assetSplit[2].substring(2) != gameVersion) {
+                        continue;
+                    }
+                    (0,core.info)(`Downloading mod '${depName}' version '${version}'`);
+                    await downloadAndExtract(asset.browser_download_url, extractPath);
+                    break;
+                }
+                (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found in ${additionalSources[depName]}.`);
+                continue;
+            }
+            else {
+                (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found.`);
+                continue;
+            }
         }
         const depDownload = dependency.downloads.find((d) => d.type === "universal")?.url;
         if (!depDownload) {
@@ -50026,6 +50048,7 @@ async function getProjectInfo(projectPath, configuration) {
                 try {
                     const data = JSON.parse(stdout.trim());
                     resolve({
+                        pluginId: data["Properties"]["PluginId"],
                         gameVersion: data["Properties"]["GameVersion"],
                         dependencies: data["Items"]["DependsOn"].reduce((obj, d) => {
                             obj[d["Identity"]] = d["Version"];

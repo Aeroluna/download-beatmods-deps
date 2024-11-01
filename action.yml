@@ -27,6 +27,14 @@ inputs:
     description: 'The configuration to use when fetching properties from the project. Defaults to `Release`.'
     required: true
     default: 'Release'
+  additional-project-paths:
+    description: 'Paths to additional csprojs to scan for dependencies.'
+    required: true
+    default: '[]'
+  additional-sources:
+    description: Additional github sources to download from if a beatmods version is not available
+    required: true
+    default: '{}'
 runs:
   using: node20
   main: dist/index.js

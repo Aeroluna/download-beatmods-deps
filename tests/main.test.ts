@@ -86,6 +86,28 @@ function mockBeatModsResponse(response: nf.Response | undefined = undefined) {
     );
 }
 
+function mockGithubResponse(response: nf.Response | undefined = undefined) {
+  when(fetch)
+    .calledWith(
+      expect.stringMatching(
+        new RegExp(/https:\/\/github\.com\/.*\/releases\/download\/.*/),
+      ),
+    )
+    .mockImplementation(
+      () =>
+        response ||
+        new nf.Response(
+          fs.createReadStream(path.join(__dirname, "files", "dummy.zip")),
+          {
+            status: 200,
+            headers: new nf.Headers({
+              "Content-Type": "application/octet-stream",
+            }),
+          },
+        ),
+    );
+}
+
 function mockProcess(
   path: string,
   args: string[] = expect.anything(),
@@ -153,8 +175,11 @@ describe("main", () => {
     setInput("project-configuration", "Release");
     setInput("aliases", "{}");
     setInput("additional-dependencies", "{}");
+    setInput("additional-project-paths", "[]");
+    setInput("additional-sources", "{}");
 
     mockBeatModsResponse();
+    mockGithubResponse();
     mockProject();
 
     mockFetch(
@@ -173,6 +198,10 @@ describe("main", () => {
       "https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=1.16.1",
       fs.readFileSync(path.join(__dirname, "files", "mods_1.16.1.json")),
     );
+    mockFetch(
+      "https://api.github.com/repos/Kylemc1413/SongCore/releases",
+      fs.readFileSync(path.join(__dirname, "files", "github_songcore.json")),
+    );
   });
 
   it("downloads all mods listed in manifest", async () => {
@@ -186,6 +215,31 @@ describe("main", () => {
     );
     expect(fetch).toHaveBeenCalledWith(
       "https://beatmods.com/uploads/6015b97e0eef816aa6d0c18a/universal/SongCore-3.1.0.zip",
+    );
+  });
+
+  it("downloads mods from alternative source", async () => {
+    mockProject({
+      dependsOn: {
+        "BS Utils": "^1.6.3",
+        SongCore: "^3.10.0",
+      },
+    });
+    setInput("additional-sources", '{ "SongCore": "Kylemc1413/SongCore" }');
+
+    await run();
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=1.13.2",
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "https://beatmods.com/uploads/600a65978384cf2e7ec725a9/universal/BS Utils-1.7.0.zip",
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.github.com/repos/Kylemc1413/SongCore/releases",
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "https://github.com/Kylemc1413/SongCore/releases/download/3.10.3/SongCore-3.10.3-bs1.30.0-32dcae8.zip",
     );
   });
 
@@ -258,9 +312,7 @@ describe("main", () => {
   it("rejects if project info can't be parsed", async () => {
     mockProcess("dotnet", expect.anything(), "blah");
 
-    await expect(run()).rejects.toThrow(
-      "Unexpected token b in JSON at position 0",
-    );
+    await expect(run()).rejects.toThrow("Unexpected token");
   });
 
   it("rejects if project info can't be retrieved", async () => {

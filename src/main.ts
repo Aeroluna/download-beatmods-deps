@@ -49,17 +49,27 @@ export async function run() {
     getInput("additional-dependencies", { required: true }),
   );
 
-  const additionalProjectPaths = getInput("additional-project-paths");
   let additionalProjectDependencies = {};
-  additionalProjectPaths
-    .split(";")
-    .forEach(
-      async (n) =>
-        (additionalProjectDependencies = {
-          ...additionalProjectDependencies,
-          ...(await getProjectInfo(n, projectConfiguration)).dependencies,
-        }),
-    );
+  const excludedNames: string[] = [];
+  await Promise.all(
+    (<string[]>(
+      JSON.parse(getInput("additional-project-paths", { required: true }))
+    )).map(async (n) => {
+      const additionalProjectInfo = await getProjectInfo(
+        n,
+        projectConfiguration,
+      );
+      additionalProjectDependencies = {
+        ...additionalProjectDependencies,
+        ...additionalProjectInfo.dependencies,
+      };
+      excludedNames.push(additionalProjectInfo.pluginId);
+    }),
+  );
+
+  const additionalSources: { [key: string]: string } = JSON.parse(
+    getInput("additional-sources", { required: true }),
+  );
 
   for (const [depName, depVersion] of Object.entries({
     ...additionalProjectDependencies,
@@ -67,7 +77,7 @@ export async function run() {
     ...additionalDependencies,
   })) {
     // is installed with other beat saber references
-    if (depName == "BSIPA") {
+    if (depName == "BSIPA" || excludedNames.includes(depName)) {
       continue;
     }
 
@@ -78,8 +88,35 @@ export async function run() {
     );
 
     if (dependency == null) {
-      warning(`Mod '${depName}' version '${depVersion}' not found.`);
-      continue;
+      if (depName in additionalSources) {
+        const releases = await fetchJson<GithubRelease[]>(
+          `https://api.github.com/repos/${additionalSources[depName]}/releases`,
+        );
+
+        for (const asset of releases.flatMap((n) => n.assets)) {
+          const assetSplit = asset.name.split("-");
+          const version = assetSplit[1];
+          if (
+            !assetSplit[0].startsWith(depName) ||
+            !satisfies(version, depVersion as string) ||
+            assetSplit[2].substring(2) != gameVersion
+          ) {
+            continue;
+          }
+
+          info(`Downloading mod '${depName}' version '${version}'`);
+          await downloadAndExtract(asset.browser_download_url, extractPath);
+          break;
+        }
+
+        warning(
+          `Mod '${depName}' version '${depVersion}' not found in ${additionalSources[depName]}.`,
+        );
+        continue;
+      } else {
+        warning(`Mod '${depName}' version '${depVersion}' not found.`);
+        continue;
+      }
     }
 
     const depDownload = dependency.downloads.find(
@@ -151,6 +188,7 @@ async function getProjectInfo(
         try {
           const data = JSON.parse(stdout.trim()) as Output;
           resolve({
+            pluginId: data["Properties"]["PluginId"]!,
             gameVersion: data["Properties"]["GameVersion"]!,
             dependencies: data["Items"]["DependsOn"].reduce(
               (
@@ -186,12 +224,22 @@ interface ModDownload {
   url: string;
 }
 
+interface GithubRelease {
+  assets: GithubReleaseDownload[];
+}
+
+interface GithubReleaseDownload {
+  name: string;
+  browser_download_url: string;
+}
+
 interface Output {
   Items: { [key: string]: { [key: string]: string }[] };
   Properties: { [key: string]: string };
 }
 
 interface ProjectInfo {
+  pluginId: string;
   gameVersion: string;
   dependencies: { [key: string]: string };
 }

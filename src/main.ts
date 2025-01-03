@@ -1,6 +1,6 @@
 import { getInput, info, warning } from "@actions/core";
 import fetch from "node-fetch";
-import { satisfies } from "semver";
+import semver from "semver";
 import decompress from "decompress";
 import fs from "fs-extra";
 import { spawn } from "child_process";
@@ -44,6 +44,40 @@ export async function run() {
     `https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=${gameVersion}`,
   );
 
+  const additionalMods = (
+    await Promise.all(
+      (<string[]>(
+        JSON.parse(getInput("additional-sources", { required: true }))
+      )).map(async (repo) => {
+        const releases = await fetchJson<GithubRelease[]>(
+          `https://api.github.com/repos/${repo}/releases`,
+        );
+        return releases
+          .flatMap((n) => n.assets)
+          .map((n) => {
+            const assetSplit = n.name.split("-");
+            const assetVersion = assetSplit[1];
+            const assetGameVersion = getGameVersion(
+              assetSplit[2].substring(2),
+              gameVersions,
+              versionAliases,
+            );
+            return <GithubMod>{
+              name: assetSplit[0],
+              version: assetVersion as string,
+              gameVersion: assetGameVersion as string,
+              download: n.browser_download_url as string,
+            };
+          })
+          .sort(
+            (a, b) =>
+              -semver.compareBuild(a.gameVersion, b.gameVersion) ||
+              -semver.compareBuild(a.version, b.version),
+          );
+      }),
+    )
+  ).flat(1);
+
   const depAliases = JSON.parse(getInput("aliases", { required: true }));
   const additionalDependencies = JSON.parse(
     getInput("additional-dependencies", { required: true }),
@@ -67,10 +101,6 @@ export async function run() {
     }),
   );
 
-  const additionalSources: { [key: string]: string } = JSON.parse(
-    getInput("additional-sources", { required: true }),
-  );
-
   for (const [depName, depVersion] of Object.entries({
     ...additionalProjectDependencies,
     ...projectInfo.dependencies,
@@ -84,50 +114,47 @@ export async function run() {
     const dependency = mods.find(
       (m) =>
         (m.name === depName || m.name == depAliases[depName]) &&
-        satisfies(m.version, depVersion as string),
+        semver.satisfies(m.version, depVersion as string),
     );
 
-    if (dependency == null) {
-      if (depName in additionalSources) {
-        const additionalSource = additionalSources[depName];
-        info(
-          `Mod '${depName}' version '${depVersion}' not found on Beatmods, searching '${additionalSource}'`,
-        );
+    if (dependency != null) {
+      const depDownload = dependency.downloads.find(
+        (d) => d.type === "universal",
+      )?.url;
 
-        if (
-          !(await searchGithubRelease(
-            additionalSource,
-            depName,
-            depVersion as string,
-            gameVersion,
-            extractPath,
-            gameVersions,
-            versionAliases,
-          ))
-        ) {
-          warning(
-            `Mod '${depName}' version '${depVersion}' not found in ${additionalSources[depName]}.`,
-          );
-        }
-
+      if (!depDownload) {
+        warning(`No universal download found for mod '${depName}'`);
         continue;
       }
 
-      warning(`Mod '${depName}' version '${depVersion}' not found.`);
+      info(`Downloading mod '${depName}' version '${dependency.version}'`);
+      await downloadAndExtract(
+        `https://beatmods.com${depDownload}`,
+        extractPath,
+      );
       continue;
     }
 
-    const depDownload = dependency.downloads.find(
-      (d) => d.type === "universal",
-    )?.url;
+    info(
+      `Mod '${depName}' version '${depVersion}' not found on Beatmods, searching Github.`,
+    );
 
-    if (!depDownload) {
-      warning(`No universal download found for mod '${depName}'`);
+    const githubDependency = additionalMods.find(
+      (n: GithubMod) =>
+        semver.lte(n.gameVersion, gameVersion) &&
+        (n.name === depName || n.name == depAliases[depName]) &&
+        semver.satisfies(n.version, depVersion as string),
+    );
+
+    if (githubDependency != null) {
+      info(
+        `Downloading mod '${depName}' version '${githubDependency.version}' from GitHub`,
+      );
+      await downloadAndExtract(githubDependency.download, extractPath);
       continue;
     }
 
-    info(`Downloading mod '${depName}' version '${dependency.version}'`);
-    await downloadAndExtract(`https://beatmods.com${depDownload}`, extractPath);
+    warning(`Mod '${depName}' version '${depVersion}' not found.`);
   }
 
   fs.appendFileSync(
@@ -155,45 +182,6 @@ async function downloadAndExtract(url: string, extractPath: string) {
     // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
     filter: (file) => !file.path.endsWith("/"),
   });
-}
-
-async function searchGithubRelease(
-  repo: string,
-  depName: string,
-  depVersion: string,
-  gameVersion: string,
-  extractPath: string,
-  gameVersions: string[],
-  versionAliases: VersionAliasCollection,
-) {
-  const releases = await fetchJson<GithubRelease[]>(
-    `https://api.github.com/repos/${repo}/releases`,
-  );
-
-  for (const asset of releases.flatMap((n) => n.assets)) {
-    const assetSplit = asset.name.split("-");
-    const assetVersion = assetSplit[1];
-    const assetGameVersion = getGameVersion(
-      assetSplit[2].substring(2),
-      gameVersions,
-      versionAliases,
-    );
-    if (
-      assetSplit[0] != depName ||
-      !satisfies(assetVersion, depVersion) ||
-      assetGameVersion != gameVersion
-    ) {
-      continue;
-    }
-
-    info(
-      `Downloading mod '${depName}' version '${assetVersion}' from '${repo}'`,
-    );
-    await downloadAndExtract(asset.browser_download_url, extractPath);
-    return true;
-  }
-
-  return false;
 }
 
 function getGameVersion(
@@ -280,6 +268,13 @@ interface GithubRelease {
 interface GithubReleaseDownload {
   name: string;
   browser_download_url: string;
+}
+
+interface GithubMod {
+  name: string;
+  version: string;
+  gameVersion: string;
+  download: string;
 }
 
 interface Output {

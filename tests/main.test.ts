@@ -176,7 +176,7 @@ describe("main", () => {
     setInput("aliases", "{}");
     setInput("additional-dependencies", "{}");
     setInput("additional-project-paths", "[]");
-    setInput("additional-sources", "{}");
+    setInput("additional-sources", "[]");
 
     mockBeatModsResponse();
     mockGithubResponse();
@@ -184,11 +184,16 @@ describe("main", () => {
 
     mockFetch(
       "https://versions.beatmods.com/versions.json",
-      JSON.stringify(["1.16.1", "1.13.2"]),
+      JSON.stringify(["1.16.1", "1.13.2", "1.31.0", "1.32.0"]),
     );
     mockFetch(
       "https://alias.beatmods.com/aliases.json",
-      JSON.stringify({ "1.13.2": ["1.13.3"], "1.16.1": ["1.16.2"] }),
+      JSON.stringify({
+        "1.13.2": ["1.13.3"],
+        "1.16.1": ["1.16.2"],
+        "1.31.0": [],
+        "1.32.0": [],
+      }),
     );
     mockFetch(
       "https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=1.13.2",
@@ -197,6 +202,10 @@ describe("main", () => {
     mockFetch(
       "https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=1.16.1",
       fs.readFileSync(path.join(__dirname, "files", "mods_1.16.1.json")),
+    );
+    mockFetch(
+      "https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=1.32.0",
+      fs.readFileSync(path.join(__dirname, "files", "mods_1.32.0.json")),
     );
     mockFetch(
       "https://api.github.com/repos/Kylemc1413/SongCore/releases",
@@ -225,7 +234,7 @@ describe("main", () => {
         SongCore: "^3.10.0",
       },
     });
-    setInput("additional-sources", '{ "SongCore": "Kylemc1413/SongCore" }');
+    setInput("additional-sources", '["Kylemc1413/SongCore"]');
 
     await run();
 
@@ -240,6 +249,32 @@ describe("main", () => {
     );
     expect(fetch).toHaveBeenCalledWith(
       "https://github.com/Kylemc1413/SongCore/releases/download/3.10.3/SongCore-3.10.3-bs1.30.0-32dcae8.zip",
+    );
+  });
+
+  it("downloads mods from alternative source if main version not available", async () => {
+    mockProject({
+      gameVersion: "1.32.0",
+      dependsOn: {
+        "BS Utils": "^1.6.3",
+        SongCore: "^3.10.0",
+      },
+    });
+    setInput("additional-sources", '["Kylemc1413/SongCore"]');
+
+    await run();
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=1.32.0",
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "https://beatmods.com/uploads/600a65978384cf2e7ec725a9/universal/BS Utils-1.7.0.zip",
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.github.com/repos/Kylemc1413/SongCore/releases",
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "https://github.com/Kylemc1413/SongCore/releases/download/3.10.4/SongCore-3.10.4-bs1.31.0-fbb0684.zip",
     );
   });
 
@@ -279,7 +314,7 @@ describe("main", () => {
     );
   });
 
-  it("logs when a mod doesn't have a universal download link", async () => {
+  it("logs when a mod doesn't exist", async () => {
     mockProject({ dependsOn: { Dummy: "^4.1.0" } });
 
     await run();

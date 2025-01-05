@@ -49921,6 +49921,7 @@ function fixResponseChunkedTransferBadEnding(request, errorCallback) {
 
 // EXTERNAL MODULE: ./node_modules/semver/index.js
 var semver = __nccwpck_require__(1383);
+var semver_default = /*#__PURE__*/__nccwpck_require__.n(semver);
 // EXTERNAL MODULE: ./node_modules/decompress/index.js
 var decompress = __nccwpck_require__(9350);
 var decompress_default = /*#__PURE__*/__nccwpck_require__.n(decompress);
@@ -49953,6 +49954,24 @@ async function run() {
     }
     (0,core.info)(`Fetching mods for game version '${gameVersion}'`);
     const mods = await fetchJson(`https://beatmods.com/api/v1/mod?sort=version&sortDirection=-1&gameVersion=${gameVersion}`);
+    const additionalMods = (await Promise.all((JSON.parse((0,core.getInput)("additional-sources", { required: true }))).map(async (repo) => {
+        const releases = await fetchJson(`https://api.github.com/repos/${repo}/releases`);
+        return releases
+            .flatMap((n) => n.assets)
+            .map((n) => {
+            const assetSplit = n.name.split("-");
+            const assetVersion = assetSplit[1];
+            const assetGameVersion = getGameVersion(assetSplit[2].substring(2), gameVersions, versionAliases);
+            return {
+                name: assetSplit[0],
+                version: assetVersion,
+                gameVersion: assetGameVersion,
+                download: n.browser_download_url,
+            };
+        })
+            .sort((a, b) => -semver_default().compareBuild(a.gameVersion, b.gameVersion) ||
+            -semver_default().compareBuild(a.version, b.version));
+    }))).flat(1);
     const depAliases = JSON.parse((0,core.getInput)("aliases", { required: true }));
     const additionalDependencies = JSON.parse((0,core.getInput)("additional-dependencies", { required: true }));
     let additionalProjectDependencies = {};
@@ -49965,7 +49984,6 @@ async function run() {
         };
         excludedNames.push(additionalProjectInfo.pluginId);
     }));
-    const additionalSources = JSON.parse((0,core.getInput)("additional-sources", { required: true }));
     for (const [depName, depVersion] of Object.entries({
         ...additionalProjectDependencies,
         ...projectInfo.dependencies,
@@ -49976,26 +49994,27 @@ async function run() {
             continue;
         }
         const dependency = mods.find((m) => (m.name === depName || m.name == depAliases[depName]) &&
-            (0,semver.satisfies)(m.version, depVersion));
-        if (dependency == null) {
-            if (depName in additionalSources) {
-                const additionalSource = additionalSources[depName];
-                (0,core.info)(`Mod '${depName}' version '${depVersion}' not found on Beatmods, searching '${additionalSource}'`);
-                if (!(await searchGithubRelease(additionalSource, depName, depVersion, gameVersion, extractPath, gameVersions, versionAliases))) {
-                    (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found in ${additionalSources[depName]}.`);
-                }
+            semver_default().satisfies(m.version, depVersion));
+        if (dependency != null) {
+            const depDownload = dependency.downloads.find((d) => d.type === "universal")?.url;
+            if (!depDownload) {
+                (0,core.warning)(`No universal download found for mod '${depName}'`);
                 continue;
             }
-            (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found.`);
+            (0,core.info)(`Downloading mod '${depName}' version '${dependency.version}'`);
+            await downloadAndExtract(`https://beatmods.com${depDownload}`, extractPath);
             continue;
         }
-        const depDownload = dependency.downloads.find((d) => d.type === "universal")?.url;
-        if (!depDownload) {
-            (0,core.warning)(`No universal download found for mod '${depName}'`);
+        (0,core.info)(`Mod '${depName}' version '${depVersion}' not found on Beatmods, searching Github.`);
+        const githubDependency = additionalMods.find((n) => semver_default().lte(n.gameVersion, gameVersion) &&
+            (n.name === depName || n.name == depAliases[depName]) &&
+            semver_default().satisfies(n.version, depVersion));
+        if (githubDependency != null) {
+            (0,core.info)(`Downloading mod '${depName}' version '${githubDependency.version}' from GitHub`);
+            await downloadAndExtract(githubDependency.download, extractPath);
             continue;
         }
-        (0,core.info)(`Downloading mod '${depName}' version '${dependency.version}'`);
-        await downloadAndExtract(`https://beatmods.com${depDownload}`, extractPath);
+        (0,core.warning)(`Mod '${depName}' version '${depVersion}' not found.`);
     }
     lib_default().appendFileSync(process.env["GITHUB_ENV"], `BeatSaberDir=${extractPath}\nGameDirectory=${extractPath}\n`, "utf8");
 }
@@ -50012,23 +50031,6 @@ async function downloadAndExtract(url, extractPath) {
         // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
         filter: (file) => !file.path.endsWith("/"),
     });
-}
-async function searchGithubRelease(repo, depName, depVersion, gameVersion, extractPath, gameVersions, versionAliases) {
-    const releases = await fetchJson(`https://api.github.com/repos/${repo}/releases`);
-    for (const asset of releases.flatMap((n) => n.assets)) {
-        const assetSplit = asset.name.split("-");
-        const assetVersion = assetSplit[1];
-        const assetGameVersion = getGameVersion(assetSplit[2].substring(2), gameVersions, versionAliases);
-        if (assetSplit[0] != depName ||
-            !(0,semver.satisfies)(assetVersion, depVersion) ||
-            assetGameVersion != gameVersion) {
-            continue;
-        }
-        (0,core.info)(`Downloading mod '${depName}' version '${assetVersion}' from '${repo}'`);
-        await downloadAndExtract(asset.browser_download_url, extractPath);
-        return true;
-    }
-    return false;
 }
 function getGameVersion(wantedGameVersion, gameVersions, versionAliases) {
     return gameVersions.find((gv) => gv === wantedGameVersion ||

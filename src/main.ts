@@ -63,6 +63,10 @@ export async function run() {
               versionAliases,
             );
             info(`indexing 1: [${n.name}] version: [${assetVersion}] gameVersion: [${assetGameVersion}]`)
+            if (assetVersion == null || assetGameVersion == null) {
+              return null;
+            }
+
             return <GithubMod>{
               name: assetSplit[0],
               version: assetVersion as string,
@@ -70,6 +74,7 @@ export async function run() {
               download: n.browser_download_url as string,
             };
           })
+          .filter(n => n != null)
           .sort(
             (a, b) =>
               -semver.compareBuild(a.gameVersion, b.gameVersion) ||

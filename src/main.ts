@@ -78,6 +78,10 @@ export async function run() {
     )
   ).flat(1);
 
+  additionalMods.forEach(n => {
+    info(`indexing: [${n.name}] version: [${n.version}] gameVersion: [${n.gameVersion}]`)
+  })
+
   const depAliases = JSON.parse(getInput("aliases", { required: true }));
   const additionalDependencies = JSON.parse(
     getInput("additional-dependencies", { required: true }),

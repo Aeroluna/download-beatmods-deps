@@ -49972,6 +49972,9 @@ async function run() {
             .sort((a, b) => -semver_default().compareBuild(a.gameVersion, b.gameVersion) ||
             -semver_default().compareBuild(a.version, b.version));
     }))).flat(1);
+    additionalMods.forEach(n => {
+        (0,core.info)(`indexing: [${n.name}] version: [${n.version}] gameVersion: [${n.gameVersion}]`);
+    });
     const depAliases = JSON.parse((0,core.getInput)("aliases", { required: true }));
     const additionalDependencies = JSON.parse((0,core.getInput)("additional-dependencies", { required: true }));
     let additionalProjectDependencies = {};

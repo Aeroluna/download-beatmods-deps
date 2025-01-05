@@ -49962,6 +49962,7 @@ async function run() {
             const assetSplit = n.name.split("-");
             const assetVersion = assetSplit[1];
             const assetGameVersion = getGameVersion(assetSplit[2].substring(2), gameVersions, versionAliases);
+            (0,core.info)(`indexing 1: [${n.name}] version: [${assetVersion}] gameVersion: [${assetGameVersion}]`);
             return {
                 name: assetSplit[0],
                 version: assetVersion,

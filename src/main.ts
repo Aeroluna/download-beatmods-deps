@@ -62,6 +62,7 @@ export async function run() {
               gameVersions,
               versionAliases,
             );
+            info(`indexing 1: [${n.name}] version: [${assetVersion}] gameVersion: [${assetGameVersion}]`)
             return <GithubMod>{
               name: assetSplit[0],
               version: assetVersion as string,

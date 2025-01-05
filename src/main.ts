@@ -64,6 +64,7 @@ export async function run() {
             );
             info(`indexing 1: [${n.name}] version: [${assetVersion}] gameVersion: [${assetGameVersion}]`)
             if (assetVersion == null || assetGameVersion == null) {
+              info(`skipped: [${n.name}] version: [${assetVersion}] gameVersion: [${assetGameVersion}]`)
               return null;
             }
 

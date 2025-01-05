@@ -49962,6 +49962,9 @@ async function run() {
             const assetSplit = n.name.split("-");
             const assetVersion = assetSplit[1];
             const assetGameVersion = getGameVersion(assetSplit[2].substring(2), gameVersions, versionAliases);
+            if (assetVersion == null || assetGameVersion == null) {
+                return null;
+            }
             return {
                 name: assetSplit[0],
                 version: assetVersion,
@@ -49969,6 +49972,7 @@ async function run() {
                 download: n.browser_download_url,
             };
         })
+            .filter(n => n != null)
             .sort((a, b) => -semver_default().compareBuild(a.gameVersion, b.gameVersion) ||
             -semver_default().compareBuild(a.version, b.version));
     }))).flat(1);

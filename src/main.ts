@@ -56,6 +56,11 @@ export async function run() {
           .flatMap((n) => n.assets)
           .map((n) => {
             const assetSplit = n.name.split("-");
+
+            if (assetSplit.length != 4) {
+              return null;
+            }
+
             const assetVersion = assetSplit[1];
             const assetGameVersion = getGameVersion(
               assetSplit[2].substring(2),
@@ -74,7 +79,7 @@ export async function run() {
               download: n.browser_download_url as string,
             };
           })
-          .filter(n => n != null)
+          .filter((n) => n != null)
           .sort(
             (a, b) =>
               -semver.compareBuild(a.gameVersion, b.gameVersion) ||

@@ -49960,6 +49960,9 @@ async function run() {
             .flatMap((n) => n.assets)
             .map((n) => {
             const assetSplit = n.name.split("-");
+            if (assetSplit.length != 4) {
+                return null;
+            }
             const assetVersion = assetSplit[1];
             const assetGameVersion = getGameVersion(assetSplit[2].substring(2), gameVersions, versionAliases);
             if (assetVersion == null || assetGameVersion == null) {
@@ -49972,7 +49975,7 @@ async function run() {
                 download: n.browser_download_url,
             };
         })
-            .filter(n => n != null)
+            .filter((n) => n != null)
             .sort((a, b) => -semver_default().compareBuild(a.gameVersion, b.gameVersion) ||
             -semver_default().compareBuild(a.version, b.version));
     }))).flat(1);

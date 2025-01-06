@@ -56,6 +56,12 @@ export async function run() {
           .flatMap((n) => n.assets)
           .map((n) => {
             const assetSplit = n.name.split("-");
+
+            if (assetSplit.length != 4) {
+              info(`early skipped [${n.name}]`)
+              return null
+            }
+
             const assetVersion = assetSplit[1];
             const assetGameVersion = getGameVersion(
               assetSplit[2].substring(2),

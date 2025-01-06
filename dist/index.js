@@ -49960,6 +49960,10 @@ async function run() {
             .flatMap((n) => n.assets)
             .map((n) => {
             const assetSplit = n.name.split("-");
+            if (assetSplit.length != 4) {
+                (0,core.info)(`early skipped [${n.name}]`);
+                return null;
+            }
             const assetVersion = assetSplit[1];
             const assetGameVersion = getGameVersion(assetSplit[2].substring(2), gameVersions, versionAliases);
             (0,core.info)(`indexing 1: [${n.name}] version: [${assetVersion}] gameVersion: [${assetGameVersion}]`);

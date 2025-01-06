@@ -49967,6 +49967,7 @@ async function run() {
                 (0,core.info)(`skipped: [${n.name}] version: [${assetVersion}] gameVersion: [${assetGameVersion}]`);
                 return null;
             }
+            (0,core.info)(`indexing 2: [${n.name}] version: [${assetVersion}] gameVersion: [${assetGameVersion}] brwosserr: [${n.browser_download_url}]`);
             return {
                 name: assetSplit[0],
                 version: assetVersion,

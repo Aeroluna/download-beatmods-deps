@@ -1,9 +1,12 @@
 import { getInput, info, warning } from "@actions/core";
+import { Response as Response } from "node-fetch";
 import fetch from "node-fetch";
 import semver from "semver";
 import decompress from "decompress";
 import fs from "fs-extra";
 import { spawn } from "child_process";
+
+const userAgent = "download-beatmods-deps/1.0";
 
 export async function run() {
   const projectConfiguration = getInput("project-configuration", {
@@ -175,19 +178,27 @@ export async function run() {
   );
 }
 
+async function fetchWithAgent(url: string): Promise<Response> {
+  const response = await fetch(url, {
+    headers: { "User-Agent": userAgent },
+  });
+
+  if (response.status != 200) {
+    throw new Error(
+      `Unexpected response status ${response.status} ${response.statusText} from [${url}]: ${response.text()}`,
+    );
+  }
+
+  return response;
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+  const response = await fetchWithAgent(url);
   return (await response.json()) as T;
 }
 
 async function downloadAndExtract(url: string, extractPath: string) {
-  const response = await fetch(url);
-
-  if (response.status != 200) {
-    throw new Error(
-      `Unexpected response status ${response.status} ${response.statusText}`,
-    );
-  }
+  const response = await fetchWithAgent(url);
 
   await decompress(Buffer.from(await response.arrayBuffer()), extractPath, {
     // https://github.com/kevva/decompress/issues/46#issuecomment-428018719

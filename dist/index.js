@@ -49937,6 +49937,7 @@ const external_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(
 
 
 
+const userAgent = "download-beatmods-deps/1.0";
 async function run() {
     const projectConfiguration = (0,core.getInput)("project-configuration", {
         required: true,
@@ -50025,15 +50026,21 @@ async function run() {
     }
     lib_default().appendFileSync(process.env["GITHUB_ENV"], `BeatSaberDir=${extractPath}\nGameDirectory=${extractPath}\n`, "utf8");
 }
+async function fetchWithAgent(url) {
+    const response = await fetch(url, {
+        headers: { "User-Agent": userAgent },
+    });
+    if (response.status != 200) {
+        throw new Error(`Unexpected response status ${response.status} ${response.statusText} from [${url}]: ${response.text()}`);
+    }
+    return response;
+}
 async function fetchJson(url) {
-    const response = await fetch(url);
+    const response = await fetchWithAgent(url);
     return (await response.json());
 }
 async function downloadAndExtract(url, extractPath) {
-    const response = await fetch(url);
-    if (response.status != 200) {
-        throw new Error(`Unexpected response status ${response.status} ${response.statusText}`);
-    }
+    const response = await fetchWithAgent(url);
     await decompress_default()(Buffer.from(await response.arrayBuffer()), extractPath, {
         // https://github.com/kevva/decompress/issues/46#issuecomment-428018719
         filter: (file) => !file.path.endsWith("/"),
